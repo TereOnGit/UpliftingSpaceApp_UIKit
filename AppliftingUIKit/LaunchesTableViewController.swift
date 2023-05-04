@@ -1,26 +1,41 @@
 import UIKit
+import SwiftUI
 
-class LaunchesTableViewController: UITableViewController {
+class LaunchesTableViewController: UITableViewController, UISearchResultsUpdating {
     
-    private var launches: [Launch]?
-    
-    .viewDidAppear {
-        do {
-            try await Network.getLaunches()
-        } catch {
-            print("Error \(error)")
-        }
-    }
+    private var launches: [Launch] = []
+    private var searchedData: [Launch] = []
+    let searchController = UISearchController(searchResultsController: nil)
     
     override func viewDidLoad() {
         super.viewDidLoad()
-            
-
-        // Uncomment the following line to preserve selection between presentations
-        // self.clearsSelectionOnViewWillAppear = false
-
-        // Uncomment the following line to display an Edit button in the navigation bar for this view controller.
-        // self.navigationItem.rightBarButtonItem = self.editButtonItem
+        
+        Task {
+            do {
+                self.launches = try await Network.getLaunches()
+                updateSearchResults(for: searchController)
+            } catch {
+                print("Error \(error)")
+            }
+        }
+        searchController.searchResultsUpdater = self
+        navigationItem.searchController = searchController
+    }
+    
+    func updateSearchResults(for searchController: UISearchController) {
+        guard let searchText = searchController.searchBar.text else {
+            searchedData = launches
+            tableView.reloadData()
+            return
+        }
+        if searchText.isEmpty {
+            searchedData = launches
+        } else {
+            searchedData = launches.filter { launch in
+                launch.name.contains(searchText)
+            }
+        }
+        tableView.reloadData()
     }
 
     // MARK: - Table view data source
@@ -30,24 +45,26 @@ class LaunchesTableViewController: UITableViewController {
     }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return launches!.count
+        return searchedData.count
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "LaunchCell", for: indexPath)
-        let launch = launches![indexPath.row]
+        let launch = searchedData[indexPath.row]
         cell.textLabel?.text = launch.name
         cell.detailTextLabel?.text = launch.dateUnix.formatted(date: .abbreviated, time: .omitted)
         return cell
     }
-
-    /*
-    // Override to support conditional editing of the table view.
-    override func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
-        // Return false if you do not want the specified item to be editable.
-        return true
+    
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        let launch = searchedData[indexPath.row]
+        let controller = UIHostingController(rootView: DetailView(launch: launch))
+        navigationController?.pushViewController(controller, animated: true)
     }
-    */
+
+    override func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
+        return false
+    }
 
     /*
     // Override to support editing the table view.
