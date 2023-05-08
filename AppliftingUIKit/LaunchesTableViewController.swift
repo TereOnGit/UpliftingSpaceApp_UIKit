@@ -5,43 +5,40 @@ class LaunchesTableViewController: UITableViewController, UISearchResultsUpdatin
     enum SortOption: Int {
         case aToZ, earliest, latest
     }
-    
+   
+    let searchController = UISearchController(searchResultsController: nil)
+    let defaults = UserDefaults.standard
     private var launches: [Launch] = []
     private var searchedData: [Launch] = []
     private var currentSort: SortOption = .aToZ {
         didSet {
             sortLaunches()
-            updateSearchResults(for: searchController)
+            defaults.set(currentSort.rawValue, forKey: "SortOption")
         }
-    }
-    let searchController = UISearchController(searchResultsController: nil)
-    
-    func sortLaunches() {
-        switch currentSort {
-        case .aToZ:
-            launches = launches.sorted(by: { $0.name < $1.name })
-        case .earliest:
-            launches = launches.sorted(by: { $0.dateUnix < $1.dateUnix })
-        case .latest:
-            launches = launches.sorted(by: { $0.dateUnix > $1.dateUnix })
-        }
-        updateSearchResults(for: searchController)
     }
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
         Task {
-            do {
-                self.launches = try await Network.getLaunches()
-                updateSearchResults(for: searchController)
-            } catch {
-                print("Error \(error)")
-            }
+            await fetchData()
         }
         searchController.searchResultsUpdater = self
         navigationItem.searchController = searchController
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Sort by", style: .plain, target: self, action: #selector(presentActionSheet))
+    }
+    
+    @MainActor
+    func fetchData() async {
+        do {
+            self.launches = try await Network.getLaunches()
+            if let defaultSorting = defaults.object(forKey: "SortOption") as! Int? {
+                currentSort = SortOption(rawValue: defaultSorting) ?? self.currentSort
+            }
+            updateSearchResults(for: searchController)
+        } catch {
+            showAlert()
+        }
     }
     
     func updateSearchResults(for searchController: UISearchController) {
@@ -59,7 +56,28 @@ class LaunchesTableViewController: UITableViewController, UISearchResultsUpdatin
         }
         tableView.reloadData()
     }
-        
+    
+    func sortLaunches() {
+        switch currentSort {
+        case .aToZ:
+            launches = launches.sorted(by: { $0.name < $1.name })
+        case .earliest:
+            launches = launches.sorted(by: { $0.dateUnix < $1.dateUnix })
+        case .latest:
+            launches = launches.sorted(by: { $0.dateUnix > $1.dateUnix })
+        }
+        updateSearchResults(for: searchController)
+    }
+    
+    func showAlert() {
+        let alert = UIAlertController(title: "Launches cannot be loaded. Please, check your internet connection and click refresh.", message: nil, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Refresh", style: .default, handler: { _ in
+            Task { await self.fetchData() }
+            }))
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alert, animated: true, completion: nil)
+    }
+
     @objc func presentActionSheet() {
         let actionSheet = UIAlertController(title: "Sort by:", message: nil, preferredStyle: .actionSheet)
         let option1 = UIAlertAction(title: "Name from A to Z", style: .default) { _ in
@@ -107,42 +125,4 @@ class LaunchesTableViewController: UITableViewController, UISearchResultsUpdatin
     override func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
         return false
     }
-
-    /*
-    // Override to support editing the table view.
-    override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
-        if editingStyle == .delete {
-            // Delete the row from the data source
-            tableView.deleteRows(at: [indexPath], with: .fade)
-        } else if editingStyle == .insert {
-            // Create a new instance of the appropriate class, insert it into the array, and add a new row to the table view
-        }    
-    }
-    */
-
-    /*
-    // Override to support rearranging the table view.
-    override func tableView(_ tableView: UITableView, moveRowAt fromIndexPath: IndexPath, to: IndexPath) {
-
-    }
-    */
-
-    /*
-    // Override to support conditional rearranging of the table view.
-    override func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool {
-        // Return false if you do not want the item to be re-orderable.
-        return true
-    }
-    */
-
-    /*
-    // MARK: - Navigation
-
-    // In a storyboard-based application, you will often want to do a little preparation before navigation
-    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        // Get the new view controller using segue.destination.
-        // Pass the selected object to the new view controller.
-    }
-    */
-
 }
