@@ -2,10 +2,31 @@ import UIKit
 import SwiftUI
 
 class LaunchesTableViewController: UITableViewController, UISearchResultsUpdating {
+    enum SortOption: Int {
+        case aToZ, earliest, latest
+    }
     
     private var launches: [Launch] = []
     private var searchedData: [Launch] = []
+    private var currentSort: SortOption = .aToZ {
+        didSet {
+            sortLaunches()
+            updateSearchResults(for: searchController)
+        }
+    }
     let searchController = UISearchController(searchResultsController: nil)
+    
+    func sortLaunches() {
+        switch currentSort {
+        case .aToZ:
+            launches = launches.sorted(by: { $0.name < $1.name })
+        case .earliest:
+            launches = launches.sorted(by: { $0.dateUnix < $1.dateUnix })
+        case .latest:
+            launches = launches.sorted(by: { $0.dateUnix > $1.dateUnix })
+        }
+        updateSearchResults(for: searchController)
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -20,6 +41,7 @@ class LaunchesTableViewController: UITableViewController, UISearchResultsUpdatin
         }
         searchController.searchResultsUpdater = self
         navigationItem.searchController = searchController
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Sort by", style: .plain, target: self, action: #selector(presentActionSheet))
     }
     
     func updateSearchResults(for searchController: UISearchController) {
@@ -36,6 +58,26 @@ class LaunchesTableViewController: UITableViewController, UISearchResultsUpdatin
             }
         }
         tableView.reloadData()
+    }
+        
+    @objc func presentActionSheet() {
+        let actionSheet = UIAlertController(title: "Sort by:", message: nil, preferredStyle: .actionSheet)
+        let option1 = UIAlertAction(title: "Name from A to Z", style: .default) { _ in
+            self.currentSort = .aToZ
+        }
+        let option2 = UIAlertAction(title: "Earliest", style: .default) { _ in
+            self.currentSort = .earliest
+        }
+        let option3 = UIAlertAction(title: "Latest", style: .default) { _ in
+            self.currentSort = .latest
+        }
+        let cancel = UIAlertAction(title: "Cancel", style: .cancel)
+        actionSheet.addAction(option1)
+        actionSheet.addAction(option2)
+        actionSheet.addAction(option3)
+        actionSheet.addAction(cancel)
+        
+        self.present(actionSheet, animated: true, completion: nil)
     }
 
     // MARK: - Table view data source
